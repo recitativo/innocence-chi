@@ -1,0 +1,23 @@
+<html>
+<head>
+<script>
+  var message;
+  var ws = new WebSocket('wss://192.168.100.12:8000', ['default', 'sub1']);
+  // event emmited when connected
+  ws.onopen = function () {
+    console.log('websocket is connected ...');
+    // sending a send event to websocket server
+    ws.send('I am connected');
+  }
+  // event emmited when receiving message 
+  ws.onmessage = function (ev) {
+    console.log(ev);
+    document.getElementById("msg").innerText = ev.data;
+  }
+</script>
+</head>
+<body>
+  <div id="msg"></div>
+</body>
+</html>
+

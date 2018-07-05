@@ -1,0 +1,7 @@
+{
+  "main": "innocence-chi.js",
+  "dependencies": {
+    "ws": "~5.2.1",
+    "express": "~4.16.3"
+  }
+}
