@@ -2,12 +2,12 @@
 <head>
 <script>
   var message;
-  var ws = new WebSocket('wss://192.168.100.12:8000', ['default', 'sub1']);
+  var ws = new WebSocket("wss://192.168.100.12:8000", ["not_implemented_subprotocol", "broadcast"]);
   // event emmited when connected
   ws.onopen = function () {
-    console.log('websocket is connected ...');
+    console.log("websocket is connected with " + ws.protocol);
     // sending a send event to websocket server
-    ws.send('I am connected');
+    ws.send("Hello");
   }
   // event emmited when receiving message 
   ws.onmessage = function (ev) {
