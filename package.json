@@ -1,8 +1,10 @@
 {
   "main": "innocence-chi.js",
+  "version": "0.0.1",
   "dependencies": {
-    "ws": "~5.2.1",
+    "amqplib": "~0.5.2",
     "express": "~4.16.3",
+    "ws": "~5.2.1",
     "uuid": "~3.3.2"
   }
 }

@@ -1,12 +1,15 @@
-const fs = require("fs");
-const path = require('path');
-const https = require("https")
+const amqp = require("amqplib");
 const express = require("express")
-const wsServer = require("ws").Server;
+const fs = require("fs");
+const https = require("https")
+const path = require("path");
 const url = require("url");
+const wsServer = require("ws").Server;
 
-var PORT = 8000;
-var PING_INTERVAL = 10000;
+const PORT = 8000;
+const PING_INTERVAL = 10000;
+const AMQP = process.env.AMQP;
+const SCOPE = ["SCHEMA", "DOMAIN", "PATH", "USER"];
 
 // ssl settings
 const opts = {
@@ -107,8 +110,9 @@ wssv.on("connection", (socket, req) => {
     socket.isAlive = true;
   });
 
+  // message as binary (node Buffer type)
   socket.on("message", (message) => {
-    var scope = null; // SCHEMA, DOMAIN, PATH (default), USER
+    var scope = 0; // 0; SCHEMA, 1: DOMAIN, 2: PATH (default), 3: USER
     // set scope
     // If subprotocol plugin has onMessage, call it.
     // And it should return scope to dispatch.
@@ -116,12 +120,13 @@ wssv.on("connection", (socket, req) => {
       scope = plugins[socket.protocol].onMessage(socket, message);
     }
 
-    // TODO: if AMQP backend enabled, send to it.
-      // TODO: pack message with URI and scope
-      // TODO: send message to AMQP broker
-
-    // otherwise dispatch message directly.
-    dispatchMessage(uri, scope, message)
+    if (AMQP) {
+      // if AMQP backend enabled, send to it.
+      sendAmqp(uri, scope, message);
+    } else {
+      // otherwise dispatch message directly.
+      dispatchMessage(uri, scope, message)
+    }
   });
 
   socket.on("disconnect", () => {
@@ -137,13 +142,18 @@ wssv.on("connection", (socket, req) => {
   });
 });
 
+/**
+ * uri: URL object
+ * scope: integer
+ * message: Buffer[] object
+ */
 function dispatchMessage(uri, scope, message) {
-  console.info(`received from ${uri.href}: ${message}`);
+  console.info(`dispatch to ${uri.href} ${SCOPE[scope]}: ${message}`);
 
   // dispatch message to clients has same scope.
-  // scope: SCHEMA, DOMAIN, PATH (default), USER
+  // 0: SCHEMA, 1: DOMAIN, 2: PATH (default), 3: USER
   var sockets = [];
-  if (scope === "SCHEMA") {
+  if (SCOPE[scope] === "SCHEMA") {
     var domains = connections[uri.protocol];
     Object.keys(domains).forEach(function(domain) {
       var paths = domains[domain];
@@ -157,7 +167,7 @@ function dispatchMessage(uri, scope, message) {
       });
     });
   }
-  else if (scope === "DOMAIN") {
+  else if (SCOPE[scope] === "DOMAIN") {
     var paths = connections[uri.protocol][uri.host];
     Object.keys(paths).forEach(function(path) {
       var users = paths[path];
@@ -168,10 +178,10 @@ function dispatchMessage(uri, scope, message) {
       });
     });
   }
-  else if (scope === "USER") {
+  else if (SCOPE[scope] === "USER") {
     sockets = [connections[uri.protocol][uri.host][uri.pathname][uri.auth]];
   }
-  else { // (scope === "PATH" || !scope), as default
+  else { // (SCOPE[scope] == "PATH" || !SCOPE[scope]), as default
     var users = connections[uri.protocol][uri.host][uri.pathname];
     Object.keys(users).forEach(function(user) {
       if (validateSocket(users[user])) {
@@ -218,10 +228,81 @@ function cleanupSocket(socket) {
   socket.terminate();
 }
 
-// TODO: AMQP connection
-  // TODO: receive message from AMQP broker
-  // TODO: unpack message with URI and scope to call dispatchMessage(socket, scope, message)
+// AMQP connection
+const amqpExch = "innocchi";
+const amqpConDelay = 5000;
+var amqpCh, amqpPromise;
+if (AMQP) {
+  console.log(`Connecting to AMQP server after ${amqpConDelay} ms: ${AMQP}`);
+  setTimeout(function () {
+    amqp.connect(AMQP).then(function(con) {
+      console.info("AMQP connected", con);
+      con.createChannel().then(function(ch) {
+        console.info("AMQP channel is created", ch);
+        amqpCh = ch;
+        amqpCh.assertExchange(amqpExch, "fanout", {durable: false}).then(function () {
+          console.log(`AMQP exchange ${amqpExch} is opened.`);
+          amqpCh.assertQueue("", {exclusive: true}).then(function(q) {
+            console.log(`AMQP queue ${q.queue} is waiting for messages.`);
+            amqpCh.bindQueue(q.queue, amqpExch, "").then(function() {
+              amqpCh.consume(q.queue, receiveAmqp, {noAck: true}).then(function () {
+                console.log("AMQP consumer is started.");
+              });
+            }).catch(console.warn);
+          }).catch(console.warn);
+        }).catch(console.warn);
+      }).catch(console.warn);
+    }).catch(console.warn);
+  }, amqpConDelay);
+}
 
+// send message to AMQP broker as Buffer
+function sendAmqp(uri, scope, message) {
+  // pack URI, scope and message into AMQP message as Buffer.
+  var amqpMessage = packAmqpMessage(uri, scope, message);
+
+  // send message to AMQP broker
+  amqpCh.publish(amqpExch, "", amqpMessage);
+  console.info("AMQP send to %s %s: %s", uri.href, SCOPE[scope], message.toString());
+}
+
+// receive message from AMQP broker as Buffer
+function receiveAmqp(amqpMessage) {
+  // unpack AMQP message to URI, scope and WebSocket message
+  unpackMessage = unpackAmqpMessage(amqpMessage.content)
+  console.info("AMQP receive for %s %s: %s", unpackMessage.uri.href, SCOPE[unpackMessage.scope], unpackMessage.message.toString());
+  dispatchMessage(unpackMessage.uri, unpackMessage.scope, unpackMessage.message);
+}
+
+/**
+ * AMQP message payload
+ * | SCOPE 1 byte(UInt8) | URI length 2 byte (UInt16BE) |
+ * | URI URI length byte (string) | MESSAGE (string) |
+ */
+
+// pack scope, URI and message into AMQP message as Buffer.
+function packAmqpMessage(uri, scope, message) {
+  var bufferScope = Buffer.alloc(1);
+  bufferScope.writeUInt8(scope);
+  var uriLength = uri.href.length;
+  var bufferUriLength = Buffer.alloc(2);
+  bufferUriLength.writeUInt16BE(uriLength);
+  var bufferUri = Buffer.alloc(uriLength);
+  bufferUri.write(uri.href);
+  var bufferMessage = Buffer.from(message);
+  var amqpMessage = Buffer.concat([bufferScope, bufferUriLength, bufferUri, bufferMessage]);
+  return amqpMessage;
+}
+
+// unpack AMQP message into URI, scope and message.
+function unpackAmqpMessage(amqpMessage) {
+  var scope = amqpMessage.slice(0, 1).readUInt8();
+  var uriLength = amqpMessage.slice(1, 3).readUInt16BE();
+  var uriEnd = 3 + uriLength;
+  var uri = url.parse(amqpMessage.slice(3, uriEnd).toString());
+  var bufferMessage = amqpMessage.slice(uriEnd);
+  return {scope: scope, uri: uri, message: bufferMessage};
+}
 
 // start server
 sslServer.listen(process.env.PORT || PORT, () => {

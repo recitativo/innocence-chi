@@ -1,11 +1,19 @@
 version: "3"
 
 services:
+  rabbitmq:
+    image: rabbitmq:3-alpine
+    ports:
+      - 5672
   innocence-chi:
     build: .
     command: nodemon -L --inspect=0.0.0.0:5858
     volumes:
       - .:/code
     ports:
-      - "8000:8000"
-      - "5858:5858"
+      - 8000:8000
+      - 5858:5858
+    links:
+      - rabbitmq
+    environment:
+      - AMQP=amqp://rabbitmq:5672

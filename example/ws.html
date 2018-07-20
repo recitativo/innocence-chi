@@ -12,7 +12,11 @@
   // event emmited when receiving message 
   ws.onmessage = function (ev) {
     console.log(ev);
-    document.getElementById("msg").innerText = ev.data;
+    var reader = new FileReader();
+    reader.addEventListener("loadend", function() {
+      document.getElementById("msg").innerText = reader.result;
+    });
+    reader.readAsText(ev.data);
   }
 </script>
 </head>

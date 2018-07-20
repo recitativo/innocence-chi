@@ -12,6 +12,6 @@ module.exports = {
     return url.format({protocol: "broadcast", host: "broadcast", pathname: "/", auth: uuid.v4()});
   },
   onMessage: (socket, message) => {
-    return "SCHEMA";
+    return 0; // 0: "SCHEMA"
   }
 };
