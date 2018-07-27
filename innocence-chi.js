@@ -17,10 +17,22 @@ const opts = {
   key: fs.readFileSync("./certs/server.key").toString(),
 };
 
-// test app settings
+// example apps
 const app = express();
-app.get("/example/", function (req, res) {
-  res.sendFile(__dirname + "/example/ws.html");
+app.get("/example/*", function (req, res) {
+  fs.realpath(__dirname + req.path, function (err, resolvedPath) {
+    if (!err && resolvedPath.startsWith(__dirname + "/example/")) {
+      fs.stat(__dirname + req.path, function (err, stats) {
+        if (stats.isFile()) {
+          res.sendFile(__dirname + req.path);
+        } else {
+          res.sendStatus(403);
+        }
+      });
+    } else {
+      res.sendStatus(404);
+    }
+  });
 });
 
 // initialize a simple http server
@@ -41,7 +53,11 @@ fs.readdirSync(pluginsDir).forEach(dir => {
       if (file !== "main.js" && file !== dir + ".js") {
         return;
       }
-      plugins[file.slice(0, -3)] = require(path.join(pluginDir, file));
+      var plugin = require(path.join(pluginDir, file));
+      // initialize plugin
+      if (plugin.init) plugin.init();
+      // register loaded plugin
+      plugins[dir] = plugin;
       console.log(`subprotocol plugin ${dir} is loaded`);
     });
   }
@@ -67,7 +83,9 @@ function handleProtocols(protocols, req) {
     var uri = plugins[protocol].handleProtocol(req);
 
     if (uri) {
+      // set this protocol as accepted
       accepted = protocol;
+      // set icSubprotocolUri to pass URI to "on connection".
       req.icSubprotocolUri = uri;
       console.info(`accepted subprotocol: ${protocol} with URI: ${uri}`);
       return true;
@@ -84,6 +102,12 @@ var connections = {};
 
 // connection succeeded
 wssv.on("connection", (socket, req) => {
+  // if subprotocol is not set, close connection.
+  if (!req.icSubprotocolUri) {
+    console.log("Subprotocol is not set on connection request. The socket is terminated.");
+    socket.terminate();
+    return false;
+  }
   // get icSubprotocolUri from req
   var uri = url.parse(req.icSubprotocolUri);
   socket["icSubprotocolUri"] = uri;
@@ -112,7 +136,7 @@ wssv.on("connection", (socket, req) => {
 
   // message as binary (node Buffer type)
   socket.on("message", (message) => {
-    var scope = 0; // 0; SCHEMA, 1: DOMAIN, 2: PATH (default), 3: USER
+    var scope = null; // 0; SCHEMA, 1: DOMAIN, 2: PATH (default), 3: USER
     // set scope
     // If subprotocol plugin has onMessage, call it.
     // And it should return scope to dispatch.
@@ -120,12 +144,15 @@ wssv.on("connection", (socket, req) => {
       scope = plugins[socket.protocol].onMessage(socket, message);
     }
 
-    if (AMQP) {
-      // if AMQP backend enabled, send to it.
-      sendAmqp(uri, scope, message);
-    } else {
-      // otherwise dispatch message directly.
-      dispatchMessage(uri, scope, message)
+    // subprotocol found and scope is set
+    if (scope !== null) {
+      if (AMQP) {
+        // if AMQP backend enabled, send to it.
+        sendAmqp(uri, scope, message);
+      } else {
+        // otherwise dispatch message directly.
+        dispatchMessage(uri, scope, message)
+      }
     }
   });
 
@@ -220,9 +247,11 @@ function validateSocket(socket) {
 
 // cleanup socket not alive
 function cleanupSocket(socket) {
-  // remove connection URI
   var uri = socket.icSubprotocolUri;
-  delete connections[uri.protocol][uri.host][uri.pathname][uri.auth];
+  if (uri) {
+    // remove connection URI
+    delete connections[uri.protocol][uri.host][uri.pathname][uri.auth];
+  }
 
   // terminate the socket
   socket.terminate();

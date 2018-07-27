@@ -1,27 +1,123 @@
 <html>
 <head>
 <script>
-  var message;
-  var ws = new WebSocket("wss://192.168.100.12:8000", ["not_implemented_subprotocol", "broadcast"]);
+var ws, connection, logs, btConnect, btDisconnect;
+window.onload = function () {
+  connection = document.getElementById("connection");
+  logs = document.getElementById("logs");
+  btConnect = document.getElementById("connect");
+  btDisconnect = document.getElementById("disconnect");
+};
+
+function connect() {
+  // clear connection status and messages
+  connection.innerText = "";
+  logs.innerText = "";
+
+  var subprotocols = [];
+  var opts = document.getElementById("subprotocol").selectedOptions;
+  for(idx = 0; idx < opts.length; idx++) {
+    subprotocols.push(opts[idx].value);
+  }
+
+  ws = new WebSocket("wss://" + location.host, subprotocols);
   // event emmited when connected
   ws.onopen = function () {
-    console.log("websocket is connected with " + ws.protocol);
-    // sending a send event to websocket server
-    ws.send("Hello");
+    connection.innerText =
+      "WebSocket connection was requested with subprotocol \"" + subprotocols.join("\", \"") + "\"\n" +
+      "Then WebSocket is connected with subprotocol \"" + ws.protocol + "\"";
+    btConnect.disabled = true;
+    btDisconnect.disabled = false;
   }
   // event emmited when receiving message 
   ws.onmessage = function (ev) {
     console.log(ev);
     var reader = new FileReader();
     reader.addEventListener("loadend", function() {
-      document.getElementById("msg").innerText = reader.result;
+      logs.innerText = logs.innerText + reader.result + "\n";
     });
     reader.readAsText(ev.data);
   }
+  // closed
+  ws.onclose = function (ev) {
+    connection.innerText += "\nClosed.";
+    btConnect.disabled = false;
+    btDisconnect.disabled = true;
+  }
+}
+
+function disconnect() {
+  if (ws) ws.close();
+}
+
+function send() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    var message = document.getElementById("message").value;
+    ws.send(message);
+  } else {
+    logs.innerText = "NOT CONNECTED. CONNECT TO WEBSOCKET SERVER AT FIRST.";
+  }
+}
 </script>
+<style>
+  .table {
+    display: table;
+    border: 1px solid gray;
+    width: 100%;
+  }
+  .row {
+    display: table-row;
+  }
+  .cell {
+    display: table-cell;
+    padding: 5px;
+    border: 1px solid gray;
+  }
+  .operation {
+    width: 20%;
+  }
+  .log {
+    width: 80%;
+  }
+</style>
 </head>
 <body>
-  <div id="msg"></div>
+  <div class="table">
+    <div class="row">
+      <div class="cell operation">
+        <dt>Subprotocol</dt>
+        <dd>
+          <select multiple id="subprotocol">
+            <option value="not_implemented">NOT IMPLEMENTED</option>
+            <option value="rpc">RPC</option>
+            <option value="broadcast">BROADCAST</option>
+          </select>
+        </dd>
+        <div style="float: right">
+          <button id="connect" onclick="connect()">Connect</button>
+          <button id="disconnect" onclick="disconnect()">Disconnect</button>
+        </div>
+      </div>
+      <div class="cell log">
+        <h4>Connection status:</h4>
+        <pre id="connection"></pre>
+      </div>
+    </div>
+    <div class="row">
+      <div class="cell">
+        <dt>Message</dt>
+        <dd>
+          <textarea id="message"></textarea>
+        </dd>
+        <div style="float: right">
+          <button onclick="send()">Send</button>
+        </div>
+      </div>
+      <div class="cell">
+        <h4>Received Message:</h4>
+        <pre id="logs"></pre>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
-
