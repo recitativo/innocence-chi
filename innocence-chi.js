@@ -17,8 +17,9 @@ const opts = {
   key: fs.readFileSync("./certs/server.key").toString(),
 };
 
-// example apps
+// web apps
 const app = express();
+// examples
 app.get("/example/*", function (req, res) {
   fs.realpath(__dirname + req.path, function (err, resolvedPath) {
     if (!err && resolvedPath.startsWith(__dirname + "/example/")) {
@@ -70,12 +71,13 @@ function handleProtocols(protocols, req) {
   // only one subprotocol can accept the request.
   var accepted = false;
   // processing subprotocols in order of the list
-  protocols.some(protocol => {
+  for (var idx = 0; idx < protocols.length; idx++) {
+    protocol = protocols[idx];
     console.info(`processing subprotocol: ${protocol}`);
 
     if (!plugins[protocol]) {
       console.info(`subprotocol plugin not found: ${protocol}`);
-      return;
+      continue;
     }
     // call handleProtocol implemented in subprotocol plugin
     // if handler accept the request, it will returns URI for the client
@@ -83,17 +85,16 @@ function handleProtocols(protocols, req) {
     var uri = plugins[protocol].handleProtocol(req);
 
     if (uri) {
-      // set this protocol as accepted
-      accepted = protocol;
+      // this protocol is accepted
       // set icSubprotocolUri to pass URI to "on connection".
       req.icSubprotocolUri = uri;
       console.info(`accepted subprotocol: ${protocol} with URI: ${uri}`);
-      return true;
+      return protocol;
     }
     console.info(`rejected subprotocol: ${protocol}`);
-  });
+  }
   // return accepted subprotocol
-  return accepted;
+  return;
 }
 
 // connection store
@@ -104,7 +105,7 @@ var connections = {};
 wssv.on("connection", (socket, req) => {
   // if subprotocol is not set, close connection.
   if (!req.icSubprotocolUri) {
-    console.log("Subprotocol is not set on connection request. The socket is terminated.");
+    console.log("Acceptable subprotocol is not set on connection request. The socket is terminated.");
     socket.terminate();
     return false;
   }

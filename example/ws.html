@@ -7,6 +7,7 @@ window.onload = function () {
   logs = document.getElementById("logs");
   btConnect = document.getElementById("connect");
   btDisconnect = document.getElementById("disconnect");
+  document.getElementById("cookies").value = document.cookie = "simpleAuthToken=token1;path=/";
 };
 
 function connect() {
@@ -14,9 +15,13 @@ function connect() {
   connection.innerText = "";
   logs.innerText = "";
 
+  var cookies = document.getElementById("cookies").value.split(" ");
+  for (var idx = 0; idx < cookies.length; idx++) {
+    document.cookie = cookies[idx];
+  }
   var subprotocols = [];
   var opts = document.getElementById("subprotocol").selectedOptions;
-  for(idx = 0; idx < opts.length; idx++) {
+  for (var idx = 0; idx < opts.length; idx++) {
     subprotocols.push(opts[idx].value);
   }
 
@@ -85,17 +90,22 @@ function send() {
   <div class="table">
     <div class="row">
       <div class="cell operation">
-        <dt>Subprotocol</dt>
+        <dt>Subprotocol: </dt>
         <dd>
           <select multiple id="subprotocol">
             <option value="not_implemented">NOT IMPLEMENTED</option>
+            <option value="simpleAuth">SIMPLE AUTH</option>
             <option value="rpc">RPC</option>
             <option value="broadcast">BROADCAST</option>
           </select>
         </dd>
+        <dt>Cookies: space separated</dt>
+        <dd>
+          <textarea id="cookies"></textarea>
+        </dd>
         <div style="float: right">
           <button id="connect" onclick="connect()">Connect</button>
-          <button id="disconnect" onclick="disconnect()">Disconnect</button>
+          <button id="disconnect" onclick="disconnect()" disabled>Disconnect</button>
         </div>
       </div>
       <div class="cell log">
