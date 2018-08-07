@@ -13,7 +13,15 @@ module.exports = {
     // noop
   },
   handleProtocol: (req) => {
-    return url.format({protocol: "broadcast", host: "broadcast", pathname: "/", auth: uuid.v4()});
+    // To accept the request, return promise resolved with URI.
+    return Promise.resolve(
+      url.format({
+        protocol: "broadcast",
+        host: "broadcast",
+        pathname: "/",
+        auth: uuid.v4()
+      })
+    );
   },
   onMessage: (socket, message) => {
     return 0; // 0: "SCHEMA"

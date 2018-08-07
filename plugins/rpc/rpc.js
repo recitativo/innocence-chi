@@ -16,7 +16,15 @@ module.exports = {
     // TODO: connect own queue
   },
   handleProtocol: (req) => {
-    return url.format({protocol: "rpc", host: "rpc", pathname: "/", auth: uuid.v4()});
+    // To accept the request, return promise resolved with URI.
+    return Promise.resolve(
+      url.format({
+        protocol: "rpc",
+        host: "rpc",
+        pathname: "/",
+        auth: uuid.v4()
+      })
+    );
   },
   onMessage: (socket, message) => {
     // TODO: send message to own queue

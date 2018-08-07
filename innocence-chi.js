@@ -64,37 +64,44 @@ fs.readdirSync(pluginsDir).forEach(dir => {
   }
 });
 
+// handle subprotocols in order of the list `protocols`
+function handleProtocol (protocols, req, idx, resolve, reject) {
+  var protocol = protocols[idx];
+  if (!protocol) {
+    reject("There is no more subprotocol should be handled.");
+  } else if (!plugins[protocol]) {
+    console.info(`subprotocol plugin not found: ${protocol}`);
+    handleProtocol(protocols, req, idx + 1, resolve, reject);
+  } else {
+    console.info(`handle subprotocol: ${protocol}`);
+    // call handleProtocol implemented in subprotocol plugin
+    // if plugin accept the request, it will returns promise resolved with URI for the request.
+    // if plugin does not accept, it will returns promise rejected.
+    plugins[protocol].handleProtocol(req).then(uri => {
+      // request accepted by the subprotocol plugin.
+      // set icSubprotocolUri to pass URI to "on connection" handler.
+      req.icSubprotocolUri = uri;
+      console.info(`accepted subprotocol: ${protocol} with URI: ${uri}`);
+      resolve(protocol);
+    }).catch(reason => {
+      // request rejected by the subprotocol plugin.
+      console.info(`rejected subprotocol: ${protocol}`);
+
+      // handle subsequent protocol
+      handleProtocol(protocols, req, idx + 1, resolve, reject);
+    });
+  }
+}
+
 // handle subprotocols
 function handleProtocols(protocols, req) {
   console.info(`subprotocols: ${protocols.join(", ")}`);
-  // accepted subprotocol. if this is set as false, all subprotocol does not accept.
-  // only one subprotocol can accept the request.
-  var accepted = false;
-  // processing subprotocols in order of the list
-  for (var idx = 0; idx < protocols.length; idx++) {
-    protocol = protocols[idx];
-    console.info(`processing subprotocol: ${protocol}`);
 
-    if (!plugins[protocol]) {
-      console.info(`subprotocol plugin not found: ${protocol}`);
-      continue;
-    }
-    // call handleProtocol implemented in subprotocol plugin
-    // if handler accept the request, it will returns URI for the client
-    // if handler does not accept, it will returns null.
-    var uri = plugins[protocol].handleProtocol(req);
-
-    if (uri) {
-      // this protocol is accepted
-      // set icSubprotocolUri to pass URI to "on connection".
-      req.icSubprotocolUri = uri;
-      console.info(`accepted subprotocol: ${protocol} with URI: ${uri}`);
-      return protocol;
-    }
-    console.info(`rejected subprotocol: ${protocol}`);
-  }
-  // return accepted subprotocol
-  return;
+  // only one of subprotocols can be accepted for the request.
+  var promise = new Promise((resolve, reject) => {
+    handleProtocol(protocols, req, 0, resolve, reject);
+  });
+  return promise;
 }
 
 // connection store
