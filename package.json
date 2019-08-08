@@ -8,5 +8,8 @@
     "request-promise-native": "~1.0.5",
     "ws": "recitativo/ws",
     "uuid": "~3.3.2"
+  },
+  "scripts": {
+    "start": "node innocence-chi.js"
   }
 }

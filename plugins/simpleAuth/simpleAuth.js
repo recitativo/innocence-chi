@@ -33,7 +33,7 @@ module.exports = {
             console.debug(`simpleAuthToken: ${token}`);
             // check token via SimpleAuth service and set URI
             request({
-              uri: "https://localhost:8000/example/" + token,
+              uri: "https://localhost/example/" + token,
               json: true,
               rejectUnauthorized: false
             }).then(response => {

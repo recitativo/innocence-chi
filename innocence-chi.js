@@ -6,7 +6,7 @@ const path = require("path");
 const url = require("url");
 const wsServer = require("ws").Server;
 
-const PORT = 8000;
+const PORT = 443;
 const PING_INTERVAL = 10000;
 const AMQP = process.env.AMQP;
 const SCOPE = ["SCHEMA", "DOMAIN", "PATH", "USER"];
@@ -19,18 +19,23 @@ const opts = {
 
 // web apps
 const app = express();
-// examples
-app.get("/example/*", function (req, res) {
-  fs.realpath(__dirname + req.path, function (err, resolvedPath) {
-    if (!err && resolvedPath.startsWith(__dirname + "/example/")) {
-      fs.stat(__dirname + req.path, function (err, stats) {
+// webroot
+const webroot = __dirname + "/webroot/"
+app.get("*", function (req, res) {
+  console.info(`${req.path} on ${webroot} is requested.`);
+  fs.realpath(webroot + req.path, function (err, resolvedPath) {
+    if (!err && resolvedPath.startsWith(webroot)) {
+      fs.stat(webroot + req.path, function (err, stats) {
         if (stats.isFile()) {
-          res.sendFile(__dirname + req.path);
+          console.info(`${resolvedPath} was sent.`);
+          res.sendFile(webroot + req.path);
         } else {
+          console.error(`Forbidden: ${resolvedPath}`);
           res.sendStatus(403);
         }
       });
     } else {
+      console.error(`NotFound: ${err}`);
       res.sendStatus(404);
     }
   });
@@ -70,7 +75,7 @@ function handleProtocol (protocols, req, idx, resolve, reject) {
   if (!protocol) {
     reject("There is no more subprotocol should be handled.");
   } else if (!plugins[protocol]) {
-    console.info(`subprotocol plugin not found: ${protocol}`);
+    console.error(`subprotocol plugin not found: ${protocol}`);
     handleProtocol(protocols, req, idx + 1, resolve, reject);
   } else {
     console.info(`handle subprotocol: ${protocol}`);
@@ -85,7 +90,7 @@ function handleProtocol (protocols, req, idx, resolve, reject) {
       resolve(protocol);
     }).catch(reason => {
       // request rejected by the subprotocol plugin.
-      console.info(`rejected subprotocol: ${protocol}`);
+      console.error(`rejected subprotocol: ${protocol}`);
 
       // handle subsequent protocol
       handleProtocol(protocols, req, idx + 1, resolve, reject);
@@ -112,7 +117,7 @@ var connections = {};
 wssv.on("connection", (socket, req) => {
   // if subprotocol is not set, close connection.
   if (!req.icSubprotocolUri) {
-    console.log("Acceptable subprotocol is not set on connection request. The socket is terminated.");
+    console.error("Acceptable subprotocol is not set on connection request. The socket is terminated.");
     socket.terminate();
     return false;
   }
@@ -173,7 +178,7 @@ wssv.on("connection", (socket, req) => {
   });
 
   socket.on("error", (err) => {
-    console.log(`error on ${uri.href}: ${err}`);
+    console.error(`error on ${uri.href}: ${err}`);
   });
 });
 
@@ -270,7 +275,7 @@ const amqpExch = "innocchi";
 const amqpConDelay = 5000;
 var amqpCh, amqpPromise;
 if (AMQP) {
-  console.log(`Connecting to AMQP server after ${amqpConDelay} ms: ${AMQP}`);
+  console.info(`Connecting to AMQP server after ${amqpConDelay} ms: ${AMQP}`);
   setTimeout(function () {
     amqp.connect(AMQP).then(function(con) {
       console.info("AMQP connected", con);
@@ -278,12 +283,12 @@ if (AMQP) {
         console.info("AMQP channel is created", ch);
         amqpCh = ch;
         amqpCh.assertExchange(amqpExch, "fanout", {durable: false}).then(function () {
-          console.log(`AMQP exchange ${amqpExch} is opened.`);
+          console.info(`AMQP exchange ${amqpExch} is opened.`);
           amqpCh.assertQueue("", {exclusive: true}).then(function(q) {
-            console.log(`AMQP queue ${q.queue} is waiting for messages.`);
+            console.info(`AMQP queue ${q.queue} is waiting for messages.`);
             amqpCh.bindQueue(q.queue, amqpExch, "").then(function() {
               amqpCh.consume(q.queue, receiveAmqp, {noAck: true}).then(function () {
-                console.log("AMQP consumer is started.");
+                console.info("AMQP consumer is started.");
               });
             }).catch(console.warn);
           }).catch(console.warn);
@@ -342,6 +347,6 @@ function unpackAmqpMessage(amqpMessage) {
 }
 
 // start server
-sslServer.listen(process.env.PORT || PORT, () => {
+sslServer.listen(PORT, () => {
   console.log(`Server started on port ${sslServer.address().port}`);
 });

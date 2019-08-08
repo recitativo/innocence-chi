@@ -7,6 +7,9 @@ services:
       - 5672
   innocence-chi:
     build: .
+    entrypoint: ./entrypoint.sh -d
+    volumes:
+      - .:/innocchi
     ports:
       - 8443:443
       - 5858:5858
