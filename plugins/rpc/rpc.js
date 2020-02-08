@@ -26,9 +26,18 @@ module.exports = {
       })
     );
   },
-  onMessage: (socket, message) => {
+  onMessage: (socket, uri, message) => {
     // TODO: send message to own queue
     // TODO: after processing on RPC, sendback message to "innocchi" exchange on RabbitMQ.
     return null; // null: DO NOT SEND VIA innocence-chi IMMEDIATELY
+  },
+  onDisconnect: (socket, uri) => {
+    // TODO
+  },
+  onClose: (socket, uri) => {
+    // TODO
+  },
+  onError: (socket, uri) => {
+    // TODO
   }
 };
