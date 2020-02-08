@@ -23,7 +23,16 @@ module.exports = {
       })
     );
   },
-  onMessage: (socket, message) => {
+  onMessage: (socket, uri, message) => {
     return 0; // 0: "SCHEMA"
+  },
+  onDisconnect: (socket, uri) => {
+    // TODO
+  },
+  onClose: (socket, uri) => {
+    // TODO
+  },
+  onError: (socket, uri) => {
+    // TODO
   }
 };

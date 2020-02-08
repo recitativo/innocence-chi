@@ -13,6 +13,8 @@ Features
 
 ## Scalability
 * All messages are sent to all WebSocket server instances via AMQP backend, if backend enabled. To use AMQP backend, set AMQP URI into `AMQP` environment variable.
+## Integrated Plugins
+* Plugin can hook requests for both of HTTP and opening WebSocket. So plugin can process both requests in one function, e.g. authorization.
 ## Subprotocol Plugins
 * All WebSocket connections are processed by subprotocol plugins when the connection requested. Subprotocols are processed in order to specified from client. The first succeeded subprotocol will be returned by WebSocket server.
 * Every subprotocol plugins should return URI for the authorized connection. According to the URI, connections and messages are managed by WebSocket server. The format of URI is "[subprotocol]:[identifier]@[domain]/[path]", based on `url` module.
@@ -33,6 +35,6 @@ Usage
 ## How to run
 1. `git clone https://github.com/recitaivo/innocence-chi.git`
 2. `cd innocence-chi`
-3. `sudo docker-compose build`
-4. `sudo docker-compose up`
+3. `docker-compose build`
+4. `docker-compose up`
 5. To test, access https://[ip address]:8000/example/ws.html

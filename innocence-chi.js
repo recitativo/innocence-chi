@@ -17,41 +17,11 @@ const opts = {
   key: fs.readFileSync("./certs/server.key").toString(),
 };
 
-// web apps
-const app = express();
-// webroot
-const webroot = __dirname + "/webroot/"
-app.get("*", function (req, res) {
-  console.info(`${req.path} on ${webroot} is requested.`);
-  fs.realpath(webroot + req.path, function (err, resolvedPath) {
-    if (!err && resolvedPath.startsWith(webroot)) {
-      fs.stat(webroot + req.path, function (err, stats) {
-        if (stats.isFile()) {
-          console.info(`${resolvedPath} was sent.`);
-          res.sendFile(webroot + req.path);
-        } else {
-          console.error(`Forbidden: ${resolvedPath}`);
-          res.sendStatus(403);
-        }
-      });
-    } else {
-      console.error(`NotFound: ${err}`);
-      res.sendStatus(404);
-    }
-  });
-});
-
-// initialize a simple http server
-const sslServer = https.createServer(opts, app);
-
-// initialize the WebSocket server instance
-const wssv = new wsServer({ "server": sslServer, "handleProtocols": handleProtocols});
-
 // load plugins
-// plugin should be deployed in directry named with subprotocol name.
-// and it should have main.js or [subprotocol].js.
+// plugin must be deployed in directory named with plugin name.
+// and it must have main.js or [plugin].js.
 const plugins = {};
-const pluginsDir = path.join(__dirname, 'plugins');
+const pluginsDir = path.join(__dirname, "plugins");
 fs.readdirSync(pluginsDir).forEach(dir => {
   const pluginDir = path.join(pluginsDir, dir);
   if (fs.statSync(pluginDir).isDirectory()) {
@@ -64,10 +34,87 @@ fs.readdirSync(pluginsDir).forEach(dir => {
       if (plugin.init) plugin.init();
       // register loaded plugin
       plugins[dir] = plugin;
-      console.log(`subprotocol plugin ${dir} is loaded`);
+      console.log(`plugin ${dir} is loaded`);
     });
   }
 });
+
+// web apps
+const app = express();
+// webroot
+const webroot = __dirname + "/webroot/"
+// register pathes served by plugins
+Object.keys(plugins).forEach(function(plugin) {
+  app.get(`/${plugin}/*`, function (req, res) {
+    if(plugins[plugin].onHttp){
+      console.info(`validate ${req.path} with ${plugin} plugin`);
+      plugins[plugin].onHttp(req, res).then(() => {
+        console.info(`accepted by ${plugin} plugin`);
+        serveStatic(req, res);
+      }).catch(reason => {
+        // request rejected by the subprotocol plugin.
+        console.error(`rejected by ${plugin} plugin due to ${reason}`);
+        handleError(req, res, 401);
+      });
+    }
+  });
+});
+// others are served as pulbic
+app.get("*", function (req, res) {
+  serveStatic(req, res);
+});
+
+// handle error response
+function handleError(req, res, status, err){
+  if(err){
+    console.error(`Error: ${err.message}`);
+    if(err.code === "ENOENT"){
+      status = 404;
+    }else{
+      status = 500;
+    }
+  }
+  res.sendStatus(status);
+  console.error(`${status}: ${res.statusMessage}: ${req.path}`);
+}
+
+// serve static files
+function serveStatic(req, res) {
+  console.info(`${req.path} on ${webroot} is requested.`);
+  var reqPath = req.path;
+  if (reqPath.endsWith("/")){
+    reqPath += "index.html";
+    console.error(`Request path changed to: ${reqPath}`);
+  }
+  fs.realpath(webroot + reqPath, function (err, resolvedPath) {
+    if (err) {
+      handleError(req, res, 0, err);
+      return;
+    }
+    if (!resolvedPath.startsWith(webroot)) {
+      handleError(req, res, 403);
+      return;
+    }
+    fs.stat(webroot + reqPath, function (err, stats) {
+      if (err) {
+        handleError(req, res, err);
+      } else {
+        if (stats.isFile()) {
+          console.info(`${resolvedPath} was sent.`);
+          res.sendFile(webroot + reqPath);
+        } else {
+          handleError(req, res, 403);
+        }
+      }
+    });
+  });
+}
+
+// initialize http server
+const sslServer = https.createServer(opts, app);
+
+// initialize WebSocket server instance
+const wssv = new wsServer({ "server": sslServer, "handleProtocols": handleProtocols});
 
 // handle subprotocols in order of the list `protocols`
 function handleProtocol (protocols, req, idx, resolve, reject) {
@@ -75,15 +122,18 @@ function handleProtocol (protocols, req, idx, resolve, reject) {
   if (!protocol) {
     reject("There is no more subprotocol should be handled.");
   } else if (!plugins[protocol]) {
-    console.error(`subprotocol plugin not found: ${protocol}`);
+    console.error(`plugin not found for ${protocol}`);
+    handleProtocol(protocols, req, idx + 1, resolve, reject);
+  } else if (!plugins[protocol].handleProtocol) {
+    console.error(`plugin does not handle websocket protocol ${protocol}`);
     handleProtocol(protocols, req, idx + 1, resolve, reject);
   } else {
     console.info(`handle subprotocol: ${protocol}`);
-    // call handleProtocol implemented in subprotocol plugin
+    // call handleProtocol implemented in plugin
     // if plugin accept the request, it will returns promise resolved with URI for the request.
     // if plugin does not accept, it will returns promise rejected.
     plugins[protocol].handleProtocol(req).then(uri => {
-      // request accepted by the subprotocol plugin.
+      // request accepted by plugin.
       // set icSubprotocolUri to pass URI to "on connection" handler.
       req.icSubprotocolUri = uri;
       console.info(`accepted subprotocol: ${protocol} with URI: ${uri}`);
@@ -154,7 +204,7 @@ wssv.on("connection", (socket, req) => {
     // If subprotocol plugin has onMessage, call it.
     // And it should return scope to dispatch.
     if (plugins[socket.protocol].onMessage) {
-      scope = plugins[socket.protocol].onMessage(socket, message);
+      scope = plugins[socket.protocol].onMessage(socket, uri, message);
     }
 
     // subprotocol found and scope is set
@@ -171,14 +221,23 @@ wssv.on("connection", (socket, req) => {
 
   socket.on("disconnect", () => {
     console.log(`disconnected: ${uri.href}`);
+    if (plugins[socket.protocol].onDisconnect) {
+      plugins[socket.protocol].onDisconnect(socket, uri);
+    }
   });
 
   socket.on("close", () => {
     console.log(`closed: ${uri.href}`);
+    if (plugins[socket.protocol].onClose) {
+      plugins[socket.protocol].onClose(socket, uri);
+    }
   });
 
   socket.on("error", (err) => {
     console.error(`error on ${uri.href}: ${err}`);
+    if (plugins[socket.protocol].onError) {
+      plugins[socket.protocol].onError(socket, uri, err);
+    }
   });
 });
 
