@@ -5,6 +5,7 @@ services:
     image: rabbitmq:3-alpine
     ports:
       - 5672
+    restart: always
   innocence-chi:
     build: .
     ports:
@@ -14,3 +15,11 @@ services:
       - rabbitmq
     environment:
       - AMQP=amqp://rabbitmq:5672
+    restart: always
+  coturn:
+    image: instrumentisto/coturn
+    ports:
+      - 3478:3478
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf
+    restart: always

@@ -2,14 +2,24 @@
   "main": "innocence-chi.js",
   "version": "0.0.1",
   "dependencies": {
-    "amqplib": "~0.5.2",
-    "express": "~4.16.3",
-    "request": "~2.87.0",
-    "request-promise-native": "~1.0.5",
+    "amqplib": "~0.5",
+    "express": "~4.17",
+    "request": "~2.88",
+    "request-promise-native": "~1.0",
     "ws": "recitativo/ws",
-    "uuid": "~3.3.2"
+    "uuid": "~3.4"
+  },
+  "devDependencies": {
+    "nodemon": "~2.0"
   },
   "scripts": {
-    "start": "node innocence-chi.js"
+    "start": "node innocence-chi.js",
+    "start:dev": "nodemon -L --inspect=0.0.0.0:5858"
+  },
+  "nodemonConfig": {
+    "ext": "js",
+    "ignore": [
+      "webroot/**/*"
+    ]
   }
 }
