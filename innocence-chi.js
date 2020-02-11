@@ -134,8 +134,8 @@ function handleProtocol (protocols, req, idx, resolve, reject) {
     // if plugin does not accept, it will returns promise rejected.
     plugins[protocol].handleProtocol(req).then(uri => {
       // request accepted by plugin.
-      // set icSubprotocolUri to pass URI to "on connection" handler.
-      req.icSubprotocolUri = uri;
+      // set ixSubprotocolUri to pass URI to "on connection" handler.
+      req.ixSubprotocolUri = uri;
       console.info(`accepted subprotocol: ${protocol} with URI: ${uri}`);
       resolve(protocol);
     }).catch(reason => {
@@ -166,14 +166,14 @@ var connections = {};
 // connection succeeded
 wssv.on("connection", (socket, req) => {
   // if subprotocol is not set, close connection.
-  if (!req.icSubprotocolUri) {
+  if (!req.ixSubprotocolUri) {
     console.error("Acceptable subprotocol is not set on connection request. The socket is terminated.");
     socket.terminate();
     return false;
   }
-  // get icSubprotocolUri from req
-  var uri = url.parse(req.icSubprotocolUri);
-  socket["icSubprotocolUri"] = uri;
+  // get ixSubprotocolUri from req
+  var uri = url.parse(req.ixSubprotocolUri);
+  socket["ixSubprotocolUri"] = uri;
   console.log(`connected: ${uri.href}`);
 
   // store socket with URI
@@ -309,7 +309,7 @@ setInterval(() => {
 // check readyState, if it is not 1, remove the socket from connections.
 function validateSocket(socket) {
   if (socket.readyState !== 1) {
-    var uri = socket.icSubprotocolUri;
+    var uri = socket.ixSubprotocolUri;
     delete connections[uri.protocol][uri.host][uri.pathname][uri.auth];
     return false;
   } else {
@@ -319,7 +319,7 @@ function validateSocket(socket) {
 
 // cleanup socket not alive
 function cleanupSocket(socket) {
-  var uri = socket.icSubprotocolUri;
+  var uri = socket.ixSubprotocolUri;
   if (uri) {
     // remove connection URI
     delete connections[uri.protocol][uri.host][uri.pathname][uri.auth];
