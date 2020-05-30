@@ -10,11 +10,17 @@
     "uuid": "~3.4"
   },
   "devDependencies": {
+    "concurrently": "~5.2",
+    "license-check-and-add": "~3.0",
     "nodemon": "~2.0"
   },
   "scripts": {
     "start": "node innocence-chi.js",
-    "start:dev": "nodemon -L --inspect=0.0.0.0:5858"
+    "start:dev": "nodemon -L --inspect=0.0.0.0:5858",
+    "check": "concurrently \"npm run check:license\"",
+    "check:license": "license-check-and-add check",
+    "fix": "concurrently \"npm run fix:license\"",
+    "fix:license": "license-check-and-add add"
   },
   "nodemonConfig": {
     "ext": "js",

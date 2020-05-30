@@ -1,0 +1,25 @@
+{
+  "ignore": [
+    ".git", ".gitignore", "*.log",
+    "certs", "**/token*",
+    "**/*.json", "**/*.txt", "**/*.md", "**/*.conf"
+  ],
+  "license": "license-header.txt",
+  "defaultFormat": {
+    "eachLine": {
+      "prepend": "# "
+    }
+  },
+  "licenseFormats": {
+    "js|css": {
+      "eachLine": {
+        "prepend": "// "
+      }
+    },
+    "html": {
+      "prepend": "<!--",
+      "append": "-->"
+    }
+  },
+  "trailingWhitespace": "TRIM"
+}
